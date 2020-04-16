@@ -393,12 +393,12 @@ public:
     {
         int fd     = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND | O_CLOEXEC, 0644);
         worker_ptr = get_worker(fd);
-        close(fd);
         if(!worker_ptr)
         {
             dprintf(STDERR_FILENO, "Cannot open %s: %m\n", filename);
             roclib_abort();
         }
+        close(fd);
     }
 
     // Construct from a std::string filename
