@@ -299,19 +299,6 @@ class roclib_ostream
         return worker_ptr;
     }
 
-    /*******************************
-     * roclib_ostream data members *
-     *******************************/
-
-    // Worker thread for accepting tasks
-    std::shared_ptr<worker> worker_ptr;
-
-    // Output buffer for formatted IO
-    std::ostringstream os;
-
-    // Flag indicating whether YAML mode is turned on
-    bool yaml = false;
-
     // Abort function which is called only once by roclib_abort
     static void roclib_abort_once [[noreturn]] ()
     {
@@ -348,6 +335,19 @@ class roclib_ostream
         // If multiple threads call roclib_abort(), the first one wins
         static int once = (roclib_abort_once(), 0);
     }
+
+    /*******************************
+     * roclib_ostream data members *
+     *******************************/
+
+    // Worker thread for accepting tasks
+    std::shared_ptr<worker> worker_ptr;
+
+    // Output buffer for formatted IO
+    std::ostringstream os;
+
+    // Flag indicating whether YAML mode is turned on
+    bool yaml = false;
 
     // Private explicit copy constructor duplicates the worker and starts a new buffer
     explicit roclib_ostream(const roclib_ostream& other)
