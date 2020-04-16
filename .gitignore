@@ -1,16 +1,11 @@
 # Prerequisites
 *.d
 
-# Object files
+# Compiled Object files
 *.o
 *.ko
 *.obj
 *.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
 
 # Precompiled Headers
 *.gch
@@ -19,34 +14,45 @@
 # Libraries
 *.lib
 *.a
+
+# Compiled Static libraries
+*.lai
 *.la
+*.a
+*.lib
 *.lo
 
-# Shared objects (inc. Windows DLLs)
-*.dll
+# Compiled Dynamic libraries
 *.so
 *.so.*
 *.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Linker output
+*.ilk
+*.map
+*.exp
 
 # Executables
 *.exe
 *.out
 *.app
-*.i*86
-*.x86_64
-*.hex
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
+# vim tags
+tags
+.tags
+.*.swp
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+# Editors
+.vscode
+
+# build-in-source directory
+build*
+
+# emacs temporary/backup files
+.\#*
+\#*\#
+*~
