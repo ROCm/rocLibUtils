@@ -9,7 +9,6 @@
 #include "roclib_tuple_helper.hpp"
 #include <atomic>
 #include <shared_mutex>
-#include <tuple>
 #include <unordered_map>
 
 /**********************************************************************
@@ -67,7 +66,7 @@ public:
         std::lock_guard<std::shared_timed_mutex> lock(mutex);
 
         // If tuple doesn't already exist, insert tuple arg by moving and 0
-        auto& ptr = map.emplace(std::move(arg), nullptr).first->second;
+        auto*& ptr = map.emplace(std::move(arg), nullptr).first->second;
 
         // If tuple existed, increment counter; otherwise allocate counter of 1
         if(ptr)
