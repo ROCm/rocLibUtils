@@ -18,6 +18,8 @@ template <typename H, typename... Ts>
 void roclib_log_arguments(roclib_ostream& os, const char* sep, H&& head, Ts&&... xs)
 {
     os << std::forward<H>(head);
+    // TODO: Replace with C++17 fold expression
+    // ((os << sep << std::forward<Ts>(xs)), ...);
     (void)(int[]){(os << sep << std::forward<Ts>(xs), 0)...};
     os << std::endl;
 }
@@ -29,7 +31,7 @@ template <typename TUP>
 class roclib_argument_profile
 {
     // Output stream
-    roclib_ostream& os;
+    roclib_ostream os;
 
     // Mutex for multithreaded access to table
     std::shared_timed_mutex mutex;
@@ -47,8 +49,7 @@ public:
     // arg is assumed to be an rvalue for efficiency
     void operator()(TUP&& arg)
     {
-        {
-            // Acquire a shared lock for reading map
+        { // Acquire a shared lock for reading map
             std::shared_lock<std::shared_timed_mutex> lock(mutex);
 
             // Look up the tuple in the map
@@ -62,21 +63,24 @@ public:
             }
         } // Release shared lock
 
-        // Acquire an exclusive lock for modifying map
-        std::lock_guard<std::shared_timed_mutex> lock(mutex);
+        { // Acquire an exclusive lock for modifying map
+            std::lock_guard<std::shared_timed_mutex> lock(mutex);
 
-        // If tuple doesn't already exist, insert tuple arg by moving and 0
-        auto*& ptr = map.emplace(std::move(arg), nullptr).first->second;
+            // If doesn't already exist, insert tuple by moving arg
+            auto*& p = map.emplace(std::move(arg), nullptr).first->second;
 
-        // If tuple existed, increment counter; otherwise allocate counter of 1
-        if(ptr)
-            ++*ptr;
-        else
-            ptr = new std::atomic_size_t{1};
+            // If new entry inserted, replace nullptr with new value
+            // If tuple already existed, atomically increment count
+            if(p)
+                ++*p;
+            else
+                p = new std::atomic_size_t{1};
+        } // Release exclusive lock
     }
 
     // Constructor
-    explicit roclib_argument_profile(const roclib_ostream& os)
+    // We must duplicate the roclib_ostream to avoid static destruction order fiasco
+    explicit argument_profile(rocclib_ostream& os)
         : os(os.dup())
     {
     }
@@ -90,7 +94,9 @@ public:
         {
             os << "- ";
             roclib_tuple_helper::print_tuple_pairs(
-                os, std::tuple_cat(p.first, std::make_tuple("call_count", p.second->load())));
+                os,
+                std::tuple_cat(std::move(p.first),
+                               std::make_tuple("call_count", p.second->load())));
             os << "\n";
             delete p.second;
         }
@@ -108,7 +114,7 @@ template <typename... Ts>
 void roclib_log_profile(roclib_ostream& os, Ts&&... xs)
 {
     // Make a tuple with the arguments
-    auto tup = std::make_tuple(xs...);
+    auto tup = std::make_tuple(std::forward<Ts>(xs)...);
 
     // Set up profile
     static roclib_argument_profile<decltype(tup)> profile(os);
