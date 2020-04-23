@@ -7,7 +7,6 @@
 
 #include "roclib_ostream.hpp"
 #include "roclib_tuple_helper.hpp"
-#include <atomic>
 #include <shared_mutex>
 #include <unordered_map>
 
@@ -31,14 +30,16 @@ template <typename TUP>
 class roclib_argument_profile
 {
     // Output stream
-    roclib_ostream os;
+    mutable roclib_ostream os;
 
     // Mutex for multithreaded access to table
-    std::shared_timed_mutex mutex;
+    mutable std::shared_timed_mutex mutex;
 
-    // Table mapping argument tuples into atomic counts
+    // Table mapping argument tuples into counts
+    // size_t is used for the map target type since atomic types are not movable, and
+    // the map elements will only be moved when we hold an exclusive lock to the map.
     std::unordered_map<TUP,
-                       std::atomic_size_t*,
+                       size_t,
                        typename roclib_tuple_helper::hash_t<TUP>,
                        typename roclib_tuple_helper::equal_t<TUP>>
         map;
@@ -58,7 +59,7 @@ public:
             // If tuple already exists, atomically increment count and return
             if(p != map.end())
             {
-                ++*p->second;
+                __atomic_fetch_add(&p->second, 1, __ATOMIC_SEQ_CST);
                 return;
             }
         } // Release shared lock
@@ -66,41 +67,47 @@ public:
         { // Acquire an exclusive lock for modifying map
             std::lock_guard<std::shared_timed_mutex> lock(mutex);
 
-            // If doesn't already exist, insert tuple by moving arg
-            auto*& p = map.emplace(std::move(arg), nullptr).first->second;
-
-            // If new entry inserted, replace nullptr with new value
-            // If tuple already existed, atomically increment count
-            if(p)
-                ++*p;
-            else
-                p = new std::atomic_size_t{1};
+            // If doesn't already exist, insert tuple by moving arg and initializing count to 0.
+            // Increment the count after searching for tuple and returning old or new match.
+            // We hold a lock to the map, so we don't have to increment the count atomically.
+            map.emplace(std::move(arg), 0).first->second++;
         } // Release exclusive lock
     }
 
     // Constructor
-    // We must duplicate the roclib_ostream to avoid static destruction order fiasco
+    // We must duplicate the roclib_ostream to avoid dependence on static destruction order
     explicit argument_profile(rocclib_ostream& os)
         : os(os.dup())
     {
     }
 
-    // Cleanup handler which dumps profile at destruction
-    ~roclib_argument_profile()
-    try
+    // Dump the current profile
+    void dump() const
     {
+        // Acquire an exclusive lock to use map
+        std::lock_guard<std::shared_timed_mutex> lock(mutex);
+
+        // Clear the output buffer
+        os.clear();
+
         // Print all of the tuples in the map
-        for(auto& p : map)
+        for(const auto& p : map)
         {
             os << "- ";
-            roclib_tuple_helper::print_tuple_pairs(
-                os,
-                std::tuple_cat(std::move(p.first),
-                               std::make_tuple("call_count", p.second->load())));
+            tuple_helper::print_tuple_pairs(
+                os, std::tuple_cat(p.first, std::make_tuple("call_count", p.second)));
             os << "\n";
-            delete p.second;
         }
+
+        // Flush out the dump
         os.flush();
+    }
+
+    // Cleanup handler which dumps profile at destruction
+    ~argument_profile()
+    try
+    {
+        dump();
     }
     catch(...)
     {
